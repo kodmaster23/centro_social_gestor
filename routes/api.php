@@ -13,5 +13,5 @@ use App\Http\Controllers\FamilyController;
 |
 */
 
-Route::resource(FamilyController::class);
+Route::resource('family', FamilyController::class);
 
