@@ -18,11 +18,11 @@ class CrudController extends BaseController
     /**
      * @var ManipulationManagerInterface
      */
-    private $manager;
+    protected $manager;
     /**
      * @var RepositoryInterface
      */
-    private $repository;
+    protected $repository;
 
     /**
      * CrudController constructor.
