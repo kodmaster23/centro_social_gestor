@@ -16,5 +16,10 @@ class FamilyController extends CrudController
         parent::__construct($manager, $repository);
     }
 
+    public function show($id)
+    {
+        return parent::show($id);
+    }
+
 
 }

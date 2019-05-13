@@ -5,16 +5,28 @@ namespace App\Extendable;
 
 
 use App\Interfaces\RepositoryInterface;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
 
 class Repository implements RepositoryInterface
 {
+    /**
+     * @var Model
+     */
     protected $model = null;
     protected $searchableFields = [];
+    /**
+     * @var JsonResource
+     */
     protected $presenter = null;
     protected $returnable = null;
+    /**
+     * @var Builder
+     */
+
     protected $query = null;
     protected $saved = null;
     /**
@@ -93,25 +105,32 @@ class Repository implements RepositoryInterface
 
     public function storeOrUpdate($values, int $id = null, array $relations = [])
     {
+        $presenter = $this->presenter;
+        $this->setPresenter(null);
+
         if($id){
             $model = $this->find($id);
         }else{
             $model = new $this->model;
         }
         $model->fill($values);
-        $this->saved = $model->save();
+        $this->returnable = $model->save();
         if(!empty($relations)){
             $this->associate($relations);
         }
-        return $this->saved;
+        if($presenter){
+            $this->setPresenter($presenter);
+        }
+
+        return $this->present();
     }
 
     public function associate(array $relations)
     {
         foreach ($relations as $relation){
-            $this->saved->$relation['name']()->associate($relation['model']);
+            $this->returnable->$relation['name']()->associate($relation['model']);
         }
-        $this->saved->save();
+        $this->returnable->save();
     }
 
     public function destroy(int $id)
