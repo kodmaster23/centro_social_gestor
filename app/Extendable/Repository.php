@@ -33,21 +33,19 @@ class Repository implements RepositoryInterface
      * @var array
      */
     protected $filters;
+    private $polymorphic = false;
 
-
-    public function find(int $id, array $with = [])
-    {
-        $query = $this->newQuery();
-        $query->with($with);
-        $this->returnable = $query->findOrFail($id);
-        return $this->present();
-    }
-
+    /**
+     * @param array $filters
+     * @param array $with
+     * @param int $pagination
+     * @return \Illuminate\Http\Resources\Json\AnonymousResourceCollection|null
+     */
     public function list(array $filters = [], array $with = [], $pagination = 45)
     {
         $query = $this->newQuery();
         $query->with($with);
-        if(!empty($filters)){
+        if (!empty($filters)) {
             $this->applyFilters($filters);
             $this->injectFiltersOnQuery();
         }
@@ -55,15 +53,29 @@ class Repository implements RepositoryInterface
         return $this->present();
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function newQuery()
+    {
+        return $this->query = $this->model::query();
+    }
+
+    /**
+     * @param array $filters
+     */
     public function applyFilters(array $filters = [])
     {
         $this->filters = $filters;
     }
 
+    /**
+     *
+     */
     public function injectFiltersOnQuery()
     {
-        foreach ($this->searchableFields as $searchableField){
-            if(in_array($searchableField['field'], $this->filters)){
+        foreach ($this->searchableFields as $searchableField) {
+            if (in_array($searchableField['field'], array_keys($this->filters))) {
                 $this->query->where(
                     $searchableField['field'],
                     $searchableField['operator'] ?? "=",
@@ -73,69 +85,133 @@ class Repository implements RepositoryInterface
         }
     }
 
-    public function setPresenter(JsonResource $resource)
-    {
-       $this->presenter = $resource;
-    }
-
-    public function newQuery()
-    {
-        return $this->query = $this->model->query();
-    }
-
+    /**
+     * @return \Illuminate\Http\Resources\Json\AnonymousResourceCollection|null
+     */
     public function present()
     {
-        if(!$this->returnable){
+        if (!$this->returnable) {
             throw new ModelNotFoundException();
         }
-        if(!$this->presenter){
+
+        if (!$this->presenter) {
             return $this->returnable;
         }
 
-        if($this->returnable instanceof Collection) {
+        if ($this->returnable instanceof Collection) {
             return $this->presenter::collection($this->returnable);
         }
 
         $model_class = get_class($this->model);
-        if($this->returnable instanceof $model_class) {
+        if ($this->returnable instanceof $model_class) {
             return new $this->presenter($this->returnable);
         }
         return $this->returnable;
     }
 
+    /**
+     * @param $values
+     * @param int|null $id
+     * @param array $relations
+     * @return \Illuminate\Http\Resources\Json\AnonymousResourceCollection|null
+     */
     public function storeOrUpdate($values, int $id = null, array $relations = [])
     {
         $presenter = $this->presenter;
         $this->setPresenter(null);
 
-        if($id){
-            $model = $this->find($id);
-        }else{
-            $model = new $this->model;
+        if ($id) {
+            $this->returnable = $this->find($id);
+        } else {
+            $this->returnable = new $this->model;
         }
-        $model->fill($values);
-        $this->returnable = $model->save();
-        if(!empty($relations)){
-            $this->associate($relations);
-        }
-        if($presenter){
+        $this->returnable->fill($values);
+
+        $this->persist($relations);
+
+        if ($presenter) {
             $this->setPresenter($presenter);
         }
 
         return $this->present();
     }
 
-    public function associate(array $relations)
+    /**
+     * @param JsonResource $resource
+     */
+    public function setPresenter($resource = null)
     {
-        foreach ($relations as $relation){
-            $this->returnable->$relation['name']()->associate($relation['model']);
+        $this->presenter = $resource;
+    }
+
+    /**
+     * @param int $id
+     * @param array $with
+     * @return \Illuminate\Http\Resources\Json\AnonymousResourceCollection|null
+     */
+    public function find(int $id, array $with = [])
+    {
+        $query = $this->newQuery();
+        $query->with($with);
+        $this->returnable = $query->findOrFail($id);
+        return $this->present();
+    }
+
+    /**
+     * @param int $id
+     * @return int
+     */
+    public function destroy(int $id)
+    {
+        return $this->model::destroy($id);
+    }
+
+    public function persist(array $relations = [])
+    {
+        if ($this->isPolymorphic()) {
+            return $this->persistPolymorphic($relations);
+        }
+        if (!empty($relations)) {
+            $this->associate($relations);
         }
         $this->returnable->save();
     }
 
-    public function destroy(int $id)
+    /**
+     * @return bool
+     */
+    public function isPolymorphic(): bool
     {
-        $model = $this->find($id);
-        return $model->destroy();
+        return $this->polymorphic;
+    }
+
+    /**
+     * @param bool $polymorphic
+     */
+    public function setPolymorphic(bool $polymorphic): void
+    {
+        $this->polymorphic = $polymorphic;
+    }
+
+    public function persistPolymorphic(array $relations)
+    {
+        $result = false;
+        foreach ($relations as $relation) {
+            $model = $relation['model'];
+            $polymorphic = $relation['polymorphic'];
+            $result = $model->$polymorphic()->save($this->returnable);
+        }
+        return $result;
+    }
+
+    /**
+     * @param array $relations
+     */
+    public function associate(array $relations)
+    {
+        foreach ($relations as $relation) {
+            $relationship = $relation['name'];
+            $this->returnable->$relationship()->associate($relation['model']);
+        }
     }
 }

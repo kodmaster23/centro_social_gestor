@@ -4,17 +4,17 @@
 namespace App\Domains\Family\Managers;
 
 
-use App\Domains\Family\Repository\FamilyRepository;
+use App\Domains\Family\Repository\RelationshipTypeRepository;
 use App\Extendable\ManipulationManager;
 
-class FamilyManager extends ManipulationManager
+class RelationshipTypeManager extends ManipulationManager
 {
     protected $validation = [
         self::CREATE => [],
         self::EDIT => []
     ];
 
-    public function __construct(FamilyRepository $repository)
+    public function __construct(RelationshipTypeRepository $repository)
     {
         parent::__construct($repository);
     }
